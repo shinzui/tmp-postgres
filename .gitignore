@@ -57,3 +57,5 @@ bin/
 core/
 *.s
 dist-newstyle
+
+.pre-commit-config.yaml
