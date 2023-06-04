@@ -1,4 +1,5 @@
 {-# OPTIONS_HADDOCK prune #-}
+{-# LANGUAGE TypeApplications #-}
 {-| This module provides types and functions for combining partial
     configs into a complete configs to ultimately make a 'Plan'.
 
@@ -44,8 +45,8 @@ import           System.IO.Error
 import           System.IO.Temp (createTempDirectory)
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.Process
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 import           Control.Applicative
+import           Prettyprinter 
 
 {-|
 
@@ -90,7 +91,7 @@ getAccum = \case
 instance Monoid a => Monoid (Accum a) where
   mempty = DontCare
 
-prettyMap :: (Pretty a, Pretty b) => Map a b -> Doc
+prettyMap :: (Pretty a, Pretty b) => Map a b -> Doc ann 
 prettyMap theMap =
   let xs = Map.toList theMap
   in vsep $ map (uncurry prettyKeyPair) xs
@@ -119,10 +120,10 @@ instance Monoid EnvironmentVariables where
 
 instance Pretty EnvironmentVariables where
   pretty EnvironmentVariables {..}
-    = text "inherit:"
+    = pretty @String "inherit:"
         <+> pretty (getLast inherit)
     <> hardline
-    <> text "specific:"
+    <> pretty @String "specific:"
     <> softline
     <> indent 2 (prettyMap specific)
 
@@ -168,15 +169,15 @@ instance Semigroup CommandLineArgs where
 
 instance Pretty CommandLineArgs where
   pretty p@CommandLineArgs {..}
-    = text "keyBased:"
+    = pretty @String "keyBased:"
     <> softline
     <> indent 2 (prettyMap keyBased)
     <> hardline
-    <> text "indexBased:"
+    <> pretty @String  "indexBased:"
     <> softline
     <> indent 2 (prettyMap indexBased)
     <> hardline
-    <> text "completed:" <+> text (unwords (completeCommandLineArgs p))
+    <> pretty @String "completed:" <+> pretty (unwords (completeCommandLineArgs p))
 
 -- Take values as long as the index is the successor of the
 -- last index.
@@ -220,27 +221,29 @@ data ProcessConfig = ProcessConfig
   deriving Semigroup via GenericSemigroup ProcessConfig
   deriving Monoid    via GenericMonoid ProcessConfig
 
+
 instance Pretty ProcessConfig where
   pretty ProcessConfig {..}
-    = text "environmentVariables:"
+    = pretty @String "environmentVariables:"
     <> softline
     <> indent 2 (pretty environmentVariables)
     <> hardline
-    <> text "commandLine:"
+    <> pretty @String "commandLine:"
     <> softline
     <> indent 2 (pretty environmentVariables)
     <> hardline
-    <> text "stdIn:" <+>
-        pretty (prettyHandle <$> getLast stdIn)
+    <> pretty @String "stdIn:" <+>
+        fromMaybe mempty (prettyHandle <$> getLast stdIn)
     <> hardline
-    <> text "stdOut:" <+>
-        pretty (prettyHandle <$> getLast stdOut)
+    <> pretty @String "stdOut:" <+>
+        fromMaybe mempty (prettyHandle <$> getLast stdOut)
     <> hardline
-    <> text "stdErr:" <+>
-        pretty (prettyHandle <$> getLast stdErr)
+    <> pretty @String "stdErr:" <+>
+        fromMaybe mempty (prettyHandle <$> getLast stdErr)
     <> hardline
-    <> text "createGroup:" <+>
+    <> pretty @String "createGroup:" <+>
         pretty (getAny createGroup)
+
 
 
 -- | The 'standardProcessConfig' sets the handles to 'stdin', 'stdout' and
@@ -280,8 +283,8 @@ silentProcessConfig = mempty
   }
 
 -- A helper to add more info to all the error messages.
-addErrorContext :: String -> Either [String] a -> Either [String] a
-addErrorContext cxt = either (Left . map (cxt <>)) Right
+addErrorConpretty :: String -> Either [String] a -> Either [String] a
+addErrorConpretty cxt = either (Left . map (cxt <>)) Right
 
 -- A helper for creating an error if a 'Last' is not defined.
 getOption :: String -> Last a -> Errors [String] a
@@ -327,8 +330,8 @@ toFilePath = \case
 
 instance Pretty CompleteDirectoryType where
   pretty = \case
-    CPermanent x -> text "CPermanent" <+> pretty x
-    CTemporary x -> text "CTemporary" <+> pretty x
+    CPermanent x -> pretty @String "CPermanent" <+> pretty x
+    CTemporary x -> pretty @String "CTemporary" <+> pretty x
 
 makePermanent :: CompleteDirectoryType -> CompleteDirectoryType
 makePermanent = \case
@@ -349,8 +352,8 @@ data DirectoryType
 
 instance Pretty DirectoryType where
   pretty = \case
-    Permanent x -> text "Permanent" <+> pretty x
-    Temporary   -> text "Temporary"
+    Permanent x -> pretty @String "Permanent" <+> pretty x
+    Temporary   -> pretty @String "Temporary"
 
 -- | Takes the last 'Permanent' value.
 instance Semigroup DirectoryType where
@@ -417,7 +420,7 @@ completePostgresPlan :: [(String, String)] -> Config -> Either [String] Complete
 completePostgresPlan envs Config {..} = runErrors $ do
   let completePostgresPlanClientOptions = connectionOptions
   completePostgresPlanProcessConfig <-
-    eitherToErrors $ addErrorContext "postgresConfig: " $
+    eitherToErrors $ addErrorConpretty "postgresConfig: " $
       completeProcessConfig envs postgresConfig
 
   pure CompletePostgresPlan {..}
@@ -437,9 +440,9 @@ completePlan envs dataDirectoryString config@Config {..} = do
     ) <- runErrors
          $ (,,,,)
         <$> getOption "logger" logger
-        <*> eitherToErrors (addErrorContext "createDbConfig: " $
+        <*> eitherToErrors (addErrorConpretty "createDbConfig: " $
               traverse (completeProcessConfig envs) $ getAccum createDbConfig)
-        <*> eitherToErrors (addErrorContext "postgresPlan: "
+        <*> eitherToErrors (addErrorConpretty "postgresPlan: "
               (completePostgresPlan envs config))
         <*> pure dataDirectoryString
         <*> getOption "connectionTimeout" connectionTimeout
@@ -448,7 +451,7 @@ completePlan envs dataDirectoryString config@Config {..} = do
       completePlanCopy = completeCopyDirectory completePlanDataDirectory <$>
         join (getLast copyConfig)
 
-  completePlanInitDb <- addErrorContext "initDbConfig: " $ completeInitDb envs dataDirectoryString config
+  completePlanInitDb <- addErrorConpretty "initDbConfig: " $ completeInitDb envs dataDirectoryString config
 
   pure Plan {..}
 
@@ -546,46 +549,46 @@ data Config = Config
 
 instance Pretty Config where
   pretty Config {..}
-    =  text "socketDirectory:"
+    =  pretty @String "socketDirectory:"
     <> softline
     <> pretty socketDirectory
     <> hardline
-    <> text "dataDirectory:"
+    <> pretty @String "dataDirectory:"
     <> softline
     <> pretty dataDirectory
     <> hardline
-    <> text "port:" <+> pretty (getLast port)
+    <> pretty @String "port:" <+> pretty (getLast port)
     <> hardline
-    <> text "temporaryDirectory:"
+    <> pretty @String "temporaryDirectory:"
     <> softline
     <> pretty (getLast temporaryDirectory)
     <> hardline
-    <> text "initDbCache:" <+> pretty (getLast initDbCache)
+    <> pretty @String "initDbCache:" <+> pretty (getLast initDbCache)
     <> hardline
-    <> text "initDbConfig:"
+    <> pretty @String "initDbConfig:"
     <> softline
     <> indent 2 (pretty $ getAccum initDbConfig)
     <> hardline
-    <> text "initDbConfig:"
+    <> pretty @String "initDbConfig:"
     <> softline
     <> indent 2 (pretty $ getAccum createDbConfig)
-    <> text "copyConfig:"
+    <> pretty @String "copyConfig:"
     <> softline
     <> indent 2 (pretty (getLast copyConfig))
     <> hardline
-    <> text "postgresConfig:"
+    <> pretty @String "postgresConfig:"
     <> softline
     <> indent 2 (pretty postgresConfig)
     <> hardline
-    <> text "connectionOptions:"
+    <> pretty @String "connectionOptions:"
     <> softline
     <> indent 2 (prettyOptions connectionOptions)
     <> hardline
-    <> text "postgresConfigFile:"
+    <> pretty @String "postgresConfigFile:"
     <> softline
-    <> indent 2 (vsep $ map (\(x, y) -> text x <> "=" <> text y) postgresConfigFile)
+    <> indent 2 (vsep $ map (\(x, y) -> pretty x <> "=" <> pretty y) postgresConfigFile)
     <> hardline
-    <> text "connectionTimeout:" <+> pretty (getLast connectionTimeout)
+    <> pretty @String "connectionTimeout:" <+> pretty (getLast connectionTimeout)
 
 socketDirectoryToConfig :: FilePath -> [(String, String)]
 socketDirectoryToConfig dir =
@@ -613,15 +616,15 @@ data CopyDirectoryCommand = CopyDirectoryCommand
 
 instance Pretty CopyDirectoryCommand where
   pretty CopyDirectoryCommand {..}
-    =  text "sourceDirectory:"
+    =  pretty @String "sourceDirectory:"
     <> softline
-    <> indent 2 (text sourceDirectory)
+    <> indent 2 (pretty sourceDirectory)
     <> hardline
-    <> text "destinationDirectory:"
+    <> pretty @String "destinationDirectory:"
     <> softline
     <> indent 2 (pretty destinationDirectory)
     <> hardline
-    <> text "useCopyOnWrite:"
+    <> pretty @String "useCopyOnWrite:"
     <+> pretty useCopyOnWrite
 
 completeCopyDirectory
@@ -847,14 +850,14 @@ data Resources = Resources
 
 instance Pretty Resources where
   pretty Resources {..}
-    =   text "resourcePlan:"
+    =   pretty @String "resourcePlan:"
     <>  softline
     <>  indent 2 (pretty resourcesPlan)
     <>  hardline
-    <>  text "resourcesSocket:"
+    <>  pretty @String "resourcesSocket:"
     <+> pretty resourcesSocketDirectory
     <>  hardline
-    <>  text "resourcesDataDir:"
+    <>  pretty @String "resourcesDataDir:"
     <+> pretty resourcesDataDir
 
 -- | Make the 'resourcesDataDir' 'CPermanent' so it will not

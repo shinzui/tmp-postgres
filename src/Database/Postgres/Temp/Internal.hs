@@ -1,4 +1,5 @@
 {-# OPTIONS_HADDOCK prune #-}
+{-# LANGUAGE TypeApplications #-}
 {-|
 This module provides the high level functions that are re-exported
 by @Database.Postgres.Temp@. Additionally it includes some
@@ -22,8 +23,8 @@ import           GHC.Generics
 import           System.Exit (ExitCode(..))
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.Process
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 import           System.Directory
+import           Prettyprinter 
 
 -- | Handle for holding temporary resources, the @postgres@ process handle
 --   and @postgres@ connection information. The 'DB' also includes the
@@ -40,11 +41,11 @@ data DB = DB
 
 instance Pretty DB where
   pretty DB {..}
-    =  text "dbResources"
+    =  pretty @String "dbResources"
     <> softline
     <> indent 2 (pretty dbResources)
     <> hardline
-    <> text "dbPostgresProcess"
+    <> pretty @String "dbPostgresProcess"
     <> softline
     <> indent 2 (pretty dbPostgresProcess)
 

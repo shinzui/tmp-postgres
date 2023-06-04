@@ -1,4 +1,5 @@
 {-# OPTIONS_HADDOCK prune #-}
+{-# LANGUAGE TypeApplications #-}
 {-|
 This module provides the low level functionality for running @initdb@, @postgres@ and @createdb@ to make a database.
 
@@ -24,7 +25,9 @@ import           System.Posix.Signals (sigINT, sigQUIT, signalProcess)
 import           System.Process
 import           System.Process.Internals
 import           System.Timeout
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
+import           Prettyprinter 
+import Data.Maybe (fromMaybe)
+import Data.Monoid (Last)
 
 -- | Internal events for debugging
 --
@@ -152,32 +155,33 @@ data CompleteProcessConfig = CompleteProcessConfig
   -- ^ Whether or not to create new process group
   }
 
-prettyHandle :: Handle -> Doc
-prettyHandle _ = text "HANDLE"
+prettyHandle :: Handle -> Doc ann
+prettyHandle _ = pretty @String "HANDLE"
 
-prettyKeyPair ::(Pretty a, Pretty b) => a -> b -> Doc
-prettyKeyPair k v = pretty k <> text ": " <> pretty v
+
+prettyKeyPair ::(Pretty a, Pretty b) => a -> b -> Doc ann
+prettyKeyPair k v = pretty k <> pretty @String ": " <> pretty v
 
 instance Pretty CompleteProcessConfig where
   pretty CompleteProcessConfig {..}
-    =  text "completeProcessConfigEnvVars:"
+    =  pretty @String "completeProcessConfigEnvVars:"
     <> softline
     <> indent 2 (vsep (map (uncurry prettyKeyPair) completeProcessConfigEnvVars))
     <> hardline
-    <> text "completeProcessConfigCmdLine:"
+    <> pretty @String "completeProcessConfigCmdLine:"
     <> softline
-    <> text (unwords completeProcessConfigCmdLine)
+    <> pretty (unwords completeProcessConfigCmdLine)
     <> hardline
-    <> text "completeProcessConfigStdIn:"
+    <> pretty @String "completeProcessConfigStdIn:"
     <+> prettyHandle completeProcessConfigStdIn
     <> hardline
-    <> text "completeProcessConfigStdOut:"
+    <> pretty @String "completeProcessConfigStdOut:"
     <+> prettyHandle completeProcessConfigStdOut
     <> hardline
-    <> text "completeProcessConfigStdErr:"
+    <> pretty @String "completeProcessConfigStdErr:"
     <+> prettyHandle completeProcessConfigStdErr
     <> hardline
-    <> text "completeProcessConfigCreateGroup:"
+    <> pretty @String "completeProcessConfigCreateGroup:"
     <> softline
     <> pretty completeProcessConfigCreateGroup
 
@@ -240,15 +244,15 @@ data CompletePostgresPlan = CompletePostgresPlan
 
 instance Pretty CompletePostgresPlan where
   pretty CompletePostgresPlan {..}
-    =  text "completePostgresPlanProcessConfig:"
+    =  pretty @String "completePostgresPlanProcessConfig:"
     <> softline
     <> indent 2 (pretty completePostgresPlanProcessConfig)
     <> hardline
-    <> text "completePostgresPlanClientOptions:"
+    <> pretty @String "completePostgresPlanClientOptions:"
     <+> prettyOptions completePostgresPlanClientOptions
 
-prettyOptions :: Client.Options -> Doc
-prettyOptions = text . BSC.unpack . Client.toConnectionString
+prettyOptions :: Client.Options -> Doc ann
+prettyOptions = pretty . BSC.unpack . Client.toConnectionString
 
 -- | The output of calling 'startPostgresProcess'.
 data PostgresProcess = PostgresProcess
@@ -260,7 +264,7 @@ data PostgresProcess = PostgresProcess
 
 instance Pretty PostgresProcess where
   pretty PostgresProcess {..}
-    =   text "postgresProcessClientOptions:"
+    =   pretty @String "postgresProcessClientOptions:"
     <+> prettyOptions postgresProcessClientOptions
 
 -- | Stop the @postgres@ process after attempting to terminate all the
@@ -327,15 +331,15 @@ data CompleteCopyDirectoryCommand = CompleteCopyDirectoryCommand
 
 instance Pretty CompleteCopyDirectoryCommand where
   pretty CompleteCopyDirectoryCommand {..}
-    =  text "copyDirectoryCommandSrc:"
+    =  pretty @String  "copyDirectoryCommandSrc:"
     <> softline
-    <> indent 2 (text copyDirectoryCommandSrc)
+    <> indent 2 (pretty copyDirectoryCommandSrc)
     <> hardline
-    <> text "copyDirectoryCommandDst:"
+    <> pretty @String "copyDirectoryCommandDst:"
     <> softline
-    <> indent 2 (text copyDirectoryCommandDst)
+    <> indent 2 (pretty copyDirectoryCommandDst)
     <> hardline
-    <> text "copyDirectoryCommandCow:"
+    <> pretty @String  "copyDirectoryCommandCow:"
     <+> pretty copyDirectoryCommandCow
 
 executeCopyDirectoryCommand :: CompleteCopyDirectoryCommand -> IO ()
@@ -365,15 +369,15 @@ data InitDbCachePlan = InitDbCachePlan
 
 instance Pretty InitDbCachePlan where
   pretty InitDbCachePlan {..}
-    =   text "cachePlanDataDirectory:"
+    =   pretty @String  "cachePlanDataDirectory:"
     <>  softline
     <>  indent 2 (pretty cachePlanDataDirectory)
     <>  hardline
-    <>  text "cachePlanInitDb:"
+    <>  pretty @String "cachePlanInitDb:"
     <>  softline
     <>  indent 2 (pretty cachePlanInitDb)
     <>  hardline
-    <>  text "cachePlanCopy:"
+    <>  pretty @String "cachePlanCopy:"
     <>  softline
     <>  indent 2 (pretty cachePlanCopy)
 
@@ -413,32 +417,32 @@ data Plan = Plan
   , completePlanConnectionTimeout :: Int
   }
 
-eitherPretty :: (Pretty a, Pretty b) => Either a b -> Doc
+eitherPretty :: (Pretty a, Pretty b) => Either a b -> Doc ann
 eitherPretty = either pretty pretty
 
 instance Pretty Plan where
   pretty Plan {..}
-    =   text "completePlanInitDb:"
+    =   pretty @String "completePlanInitDb:" 
     <>  softline
-    <>  indent 2 (pretty $ fmap eitherPretty completePlanInitDb)
+    <>  indent 2 (maybe mempty eitherPretty completePlanInitDb)
     <>  hardline
-    <>  text "completePlanCopy:"
+    <>  pretty @String "completePlanCopy:"
     <>  softline
     <>  indent 2 (pretty completePlanCopy)
     <>  hardline
-    <>  text "completePlanCreateDb:"
+    <>  pretty @String "completePlanCreateDb:"
     <>  softline
     <>  indent 2 (pretty completePlanCreateDb)
     <>  hardline
-    <>  text "completePlanPostgres:"
+    <>  pretty @String "completePlanPostgres:"
     <>  softline
     <>  indent 2 (pretty completePlanPostgres)
     <>  hardline
-    <>  text "completePlanConfig:"
+    <>  pretty @String "completePlanConfig:"
     <>  softline
     <>  indent 2 (pretty completePlanConfig)
     <>  hardline
-    <>  text "completePlanDataDirectory:"
+    <>  pretty @String "completePlanDataDirectory:"
     <+> pretty completePlanDataDirectory
 
 -- | 'startPlan' optionally calls @initdb@, optionally calls @createdb@ and
