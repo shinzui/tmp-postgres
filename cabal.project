@@ -1,0 +1,7 @@
+packages: ./
+
+source-repository-package
+   type: git
+   location: https://github.com/shinzui/postgres-options
+   tag: 7108a5c3d381940c006dfbd6e0f1a1787eb5caae
+
